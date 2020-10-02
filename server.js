@@ -26,10 +26,10 @@ function menu() {
           "Add department",
           "Add employee",
           "Add role",
-          "View Department",
+          "View Departments",
           "View Roles",
           "View Employees",
-          "Update Employee role",
+          "Update employee role",
           "Exit",
         ],
       },
@@ -50,21 +50,62 @@ function menu() {
           viewEmp();
         case "Update Employee role":
           upRole();
-        case "Exit":
-          exit();
+        default:
+          connection.end();
+          process.exit();
       }
     });
 }
+
+viewDept = () => {
+  console.log("Departments:");
+  connection.query("SELECT id, name FROM department", function (err, results) {
+    if (err) throw err;
+    console.log(table.getTable(results));
+    menu();
+  });
+};
+
+viewRole = () => {
+  console.log("Roles:");
+  connection.query(
+    "SELECT id, title, salary, department_id department FROM role",
+    function (err, results) {
+      if (err) throw err;
+      console.log(table.getTable(results));
+      menu();
+    }
+  );
+};
+
+viewEmp = () => {
+  console.log("Employees:");
+  connection.query(
+    "SELECT id, first_name, last_name, role_id FROM employee",
+    function (err, results) {
+      if (err) throw err;
+      console.log(table.getTable(results));
+      menu();
+    }
+  );
+};
 addDept = () => {
   inquirer
     .prompt({
       name: "aDept",
-      type: "text",
-      message: "Please enter the department name you would like to add",
+      type: "input",
+      message: "Please enter the department would like to add",
     })
     .then(function () {
-      // connection.query(INSERT INTO department)
-      console.log("yes");
+      connection.query(
+        "INSERT INTO department (name) VALUES (?)",
+        answer.aDept,
+        (err, results) => {
+          if (err) throw err;
+          console.log(`${answer.aDept} was added.`);
+        }
+      );
+      mainMenu();
     });
 };
 
@@ -73,7 +114,7 @@ addEmp = () => {
     .prompt(
       {
         name: "empfName",
-        type: "text",
+        type: "input",
         message: "Please enter the employee's first name?",
       },
       {
@@ -119,35 +160,6 @@ addRole = () => {
     });
 };
 
-viewDept = () => {
-  inquirer
-    .prompt({
-      name: "deptName",
-      type: "text",
-      message: "Please enter the department name you would like to add",
-    })
-    .then(function () {
-      // connection.query(INSERT INTO department)
-      console.log("yes");
-    });
-};
-
-viewRole = () => {};
-
-viewEmp = () => {};
-
 upRole = () => {};
 
 exit = () => {};
-
-// questions
-// view, delete, add
-
-// add department
-// add role
-// add employee
-// update employee roles
-// view departments
-// view roles
-// view employees
-// Leave app
