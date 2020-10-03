@@ -2,7 +2,6 @@ const mysql = require("mysql");
 const inquirer = require("inquirer");
 const consoleTable = require("console.table");
 
-// connecting to database
 var connection = mysql.createConnection({
   host: "localhost",
   port: 3306,
@@ -14,11 +13,24 @@ var connection = mysql.createConnection({
 connection.connect(function (err) {
   if (err) throw err;
   console.log("connected as id " + connection.threadId + "\n");
-  // run beginning function
-  start();
+  // display menu
+  menu();
 });
-// function that presents main menu of options for user
-function start() {
+
+let managerId = 0;
+
+// set the default manager id because we cant have two auto incrementing tables in mysql
+connection.query("SELECT manager_id FROM employee;", function (err, res) {
+  if (err) throw err;
+  for (let i = 0; i < res.length; i++) {
+    if (res[i].manager_id != null && managerId < res[i].manager_id) {
+      managerId = res[i].manager_id;
+    }
+  }
+});
+
+// main menu options
+function menu() {
   inquirer
     .prompt({
       name: "menu",
@@ -35,7 +47,7 @@ function start() {
         "Remove an employee",
       ],
     })
-    // running a function based on user repsonse...
+    // run corresponding function
     .then((response) => {
       switch (response.menu) {
         case "View employees":
@@ -66,29 +78,26 @@ function start() {
     });
 }
 
-// function to view employees
 function viewEmp() {
   connection.query(
-    "SELECT employee.employee_id, employee.first_name, employee.last_name, role.title, department.name, role.salary, employee.manager_id, employee.first_name FROM employee INNER JOIN role ON employee.role_id=role.id INNER JOIN department ON department.id=role.department_id;",
+    "SELECT employee.id, employee.first_name, employee.last_name, role.title, department.name, role.salary, employee.manager_id, employee.first_name FROM employee INNER JOIN role ON employee.role_id=role.id INNER JOIN department ON department.id=role.department_id;",
     function (err, res) {
       if (err) throw err;
       console.table(res);
-      start();
+      menu();
     }
   );
 }
 
 function viewDept() {
-  // initializing array to store the departments
   let departments = [];
-  // how to get all departments and store them into an array??
+  // get the all the names of the departments and store them in an array
   connection.query("SELECT name FROM department;", function (err, res) {
     if (err) throw err;
-    // loop through departments and push into array
     for (let x = 0; x < res.length; x++) {
       departments.push(res[x].name);
     }
-
+    // Ask the user which department they would like to see
     inquirer
       .prompt({
         name: "department",
@@ -98,36 +107,31 @@ function viewDept() {
       })
       .then((response) => {
         connection.query(
-          `SELECT employee.employee_id, employee.first_name, employee.last_name, role.title, department.name, role.salary, 
+          `SELECT employee.id, employee.first_name, employee.last_name, role.title, department.name, role.salary, 
                     concat(employee2.first_name, " ", employee2.last_name) manager FROM employee 
                     LEFT JOIN role ON employee.role_id=role.id 
                     LEFT JOIN department ON department.id=role.department_id 
-                    LEFT JOIN employee employee2 ON employee.employee_id=employee2.manager_id 
+                    LEFT JOIN employee employee2 ON employee.id=employee2.manager_id 
                     WHERE name=?`,
           response.department,
           function (err, res) {
             if (err) throw err;
             console.table(res);
-            start();
+            menu();
           }
         );
       });
   });
 }
 
-// function to view roles
 function viewRole() {
-  // array to hold roles to provide to user as choices
+  // get all of the role names and push them into an array
   let roles = [];
-
   connection.query("SELECT title FROM role;", function (err, res) {
     if (err) throw err;
-    // loop through roles and push into array
     for (let x = 0; x < res.length; x++) {
       roles.push(res[x].title);
     }
-
-    // asking user what role they want to view
     inquirer
       .prompt({
         name: "role",
@@ -137,70 +141,72 @@ function viewRole() {
       })
       .then((response) => {
         connection.query(
-          `SELECT employee.employee_id, employee.first_name, employee.last_name, role.title, department.name, role.salary, 
+          `SELECT employee.id, employee.first_name, employee.last_name, role.title, department.name, role.salary, 
                     concat(employee2.first_name, " ", employee2.last_name) manager FROM employee 
                     LEFT JOIN role ON employee.role_id=role.id 
                     LEFT JOIN department ON department.id=role.department_id 
-                    LEFT JOIN employee employee2 ON employee.employee_id=employee2.manager_id 
+                    LEFT JOIN employee employee2 ON employee.id=employee2.manager_id 
                     WHERE title=?`,
           response.role,
           function (err, res) {
             if (err) throw err;
             console.table(res);
-            start();
+            menu();
           }
         );
       });
   });
 }
 
-// function to add employee
 function addEmp() {
-  let employees = [];
-  connection.query("SELECT employee_id FROM employee;", function (err, res) {
-    if (err) throw err;
-    // loop through employees and push into array
-    for (let x = 0; x < res.length; x++) {
-      employees.push(res[x].employee_id);
-    }
-    // asking user the name of the new employee
-    inquirer
-      .prompt([
+  inquirer
+    .prompt([
+      {
+        name: "first_name",
+        type: "input",
+        message:
+          "What is the first name of the new employee you would like to add?",
+      },
+      {
+        name: "last_name",
+        type: "input",
+        message:
+          "What is the last name of the new employee you would like to add?",
+      },
+      {
+        name: "manager",
+        type: "list",
+        message: "Is this employee a manager?",
+        choices: ["Yes", "No"],
+      },
+    ])
+    .then((response) => {
+      if (response.manager == "Yes") {
+        managerId++;
+        response.manager = managerId;
+      } else {
+        response.manager = null;
+      }
+      connection.query(
+        `INSERT INTO employee SET ?`,
         {
-          name: "firstName",
-          type: "input",
-          message:
-            "What is the first name of the new employee you would like to add?",
+          first_name: response.first_name,
+          last_name: response.last_name,
+          role_id: null,
+          manager_id: response.manager,
         },
-        {
-          name: "lastName",
-          type: "input",
-          message:
-            "What is the last name of the new employee you would like to add?",
-        },
-      ])
-      .then((response) => {
-        connection.query(
-          `INSERT INTO employee SET ?`,
-          {
-            first_name: response.firstName,
-            last_name: response.lastName,
-            role_id: null,
-            manager_id: null,
-          },
-          function (err, res) {
-            if (err) throw err;
-            console.log(
-              `Added ${response.firstName}${" "}${response.lastName}!`
-            );
-            start();
-          }
-        );
-      });
-  });
+        function (err, res) {
+          if (err) throw err;
+          console.log(
+            `Added ${response.first_name}${" "}${response.last_name}!`
+          );
+          menu();
+        }
+      );
+    });
+  //   });
 }
 
-// function to add a department
 function newDept() {
   // initialize array to store # of departments created to push the correct id into the new row
   let numDepartments = [];
@@ -229,12 +235,11 @@ function newDept() {
           }
         );
         console.log(`Successfully added ${response.newDepartment}!`);
-        start();
+        menu();
       });
   });
 }
 
-// function to create a role
 function newRole() {
   // array to hold number of roles to create the id
   let numRoles = [];
@@ -270,12 +275,11 @@ function newRole() {
           }
         );
         console.log(`Successfully added ${response.newRole}!`);
-        start();
+        menu();
       });
   });
 }
 
-// function to Update an employee's role
 function updateRole() {
   connection.query(
     "SELECT id, concat(first_name, ' ', last_name) fullName FROM employee",
@@ -310,13 +314,13 @@ function updateRole() {
                 connection.query(
                   `UPDATE employee SET role_id=${
                     response2.newRole.split(" ")[0]
-                  } WHERE employee.employee_id=${employeeId}`,
+                  } WHERE employee.id=${employeeId}`,
                   function (err, res) {
                     if (err) throw err;
                   }
                 );
                 console.log("Role update successful!");
-                start();
+                menu();
               });
           });
         });
@@ -345,7 +349,7 @@ function removeEmp() {
             function (err, res) {
               if (err) throw err;
               console.log("Employee Removed");
-              start();
+              menu();
             }
           );
         });
