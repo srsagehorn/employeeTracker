@@ -149,7 +149,6 @@ function viewRole() {
 
 function addEmp() {
   // set the default manager id at the largest existing id number
-  let roleId = 0;
   let managerId = 0;
   connection.query("SELECT manager_id FROM employee;", function (err, res) {
     if (err) throw err;
@@ -195,89 +194,78 @@ function addEmp() {
     ])
     .then((response) => {
       // change the role title to the role id
-      //   This section is still not working, returns undefined but console logs correctly
-      function roleToId() {
-        connection.query("SELECT id, title FROM role;", function (err, res) {
-          if (err) throw err;
-          for (let i = 0; i < res.length; i++) {
-            if (res[i].title == response.role) {
-              roleId = res[i].id;
-              console.log(roleId);
-              return roleId;
-            }
+      let roleId;
+      connection.query("SELECT id, title FROM role;", function (err, res) {
+        if (err) throw err;
+        for (let i = 0; i < res.length; i++) {
+          if (res[i].title == response.role) {
+            roleId = res[i].id;
           }
-        });
-      }
-      console.log(roleToId());
-      if (response.manager == "Yes") {
-        managerId++;
-        response.manager = managerId;
-      } else {
-        response.manager = null;
-      }
-      console.log(response.manager);
-      connection.query(
-        `INSERT INTO employee SET ?`,
-        {
-          first_name: response.first_name,
-          last_name: response.last_name,
-          role_id: roleToId(),
-          manager_id: response.manager,
-        },
-        function (err, res) {
-          if (err) throw err;
-          console.log(
-            `Added ${response.first_name}${" "}${response.last_name}!`
-          );
-          menu();
         }
-      );
+        if (response.manager == "Yes") {
+          managerId++;
+          response.manager = managerId;
+        } else {
+          response.manager = null;
+        }
+        connection.query(
+          `INSERT INTO employee SET ?`,
+          {
+            first_name: response.first_name,
+            last_name: response.last_name,
+            role_id: roleId,
+            manager_id: response.manager,
+          },
+          function (err, res) {
+            if (err) throw err;
+            console.log(
+              `Added ${response.first_name}${" "}${response.last_name}!`
+            );
+            menu();
+          }
+        );
+      });
     });
 }
 
 function newDept() {
-  // jerry rig an auto incrementing department id
-  let deptId = [];
-  connection.query("SELECT id FROM department;", function (err, res) {
-    if (err) throw err;
-    for (let i = 0; i < res.length; i++) {
-      deptId.push(res[i].id);
-    }
-    inquirer
-      .prompt({
-        name: "newDepartment",
-        type: "input",
-        message:
-          "What is the name of the new department you would like to add?",
-      })
-      .then((response) => {
-        connection.query(
-          `INSERT INTO department SET ?`,
-          {
-            id: deptId.length + 1,
-            name: response.newDepartment,
-          },
-          function (err, res) {
-            if (err) throw err;
-          }
-        );
-        console.log(`Successfully added ${response.newDepartment}!`);
-        menu();
-      });
-  });
+  inquirer
+    .prompt({
+      name: "newDepartment",
+      type: "input",
+      message: "What is the name of the new department you would like to add?",
+    })
+    .then((response) => {
+      connection.query(
+        `INSERT INTO department SET ?`,
+        {
+          name: response.newDepartment,
+        },
+        function (err, res) {
+          if (err) throw err;
+        }
+      );
+      console.log(`Successfully added ${response.newDepartment}!`);
+      menu();
+    });
 }
 
 function newRole() {
-  // array to hold number of roles to create the id
-  let numRoles = [];
-  connection.query("SELECT id FROM role;", function (err, res) {
+  // get all of the department names and push them into an array
+  let departments = [];
+  connection.query("SELECT name FROM department;", function (err, res) {
     if (err) throw err;
-    // loop through roles and push into array
     for (let i = 0; i < res.length; i++) {
-      numRoles.push(res[i].id);
+      departments.push(res[i].name);
     }
     inquirer
       .prompt([
+        {
+          name: "deptId",
+          type: "list",
+          message: "What department will this role be in?",
+          choices: departments,
+        },
         {
           name: "newRole",
           type: "input",
@@ -290,24 +278,38 @@ function newRole() {
         },
       ])
       .then((response) => {
-        connection.query(
-          `INSERT INTO role SET ?`,
-          {
-            id: numRoles.length + 1,
-            title: response.newRole,
-            salary: response.salary,
-          },
-          function (err, res) {
-            if (err) throw err;
-          }
-        );
-        console.log(`Successfully added ${response.newRole}!`);
-        menu();
+        //   change the department name to the department id
+        connection.query(`SELECT id, name FROM department;`, function (
+          err,
+          res
+        ) {
+          if (err) throw err;
+          res.forEach((department) => {
+            if (department.name == response.deptId) {
+              response.deptId = department.id;
+            }
+          });
+          //   create a new role in the db
+          connection.query(
+            `INSERT INTO role SET ?`,
+            {
+              title: response.newRole,
+              salary: response.salary,
+              department_id: response.deptId,
+            },
+            function (err, res) {
+              if (err) throw err;
+            }
+          );
+          console.log(`Successfully added ${response.newRole}!`);
+          menu();
+        });
       });
   });
 }
 
 function updateRole() {
+  // create an array of employee names
   connection.query(
     "SELECT id, concat(first_name, ' ', last_name) fullName FROM employee",
     function (err, results2) {
