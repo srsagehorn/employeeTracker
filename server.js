@@ -17,18 +17,6 @@ connection.connect(function (err) {
   menu();
 });
 
-let managerId = 0;
-
-// set the default manager id because we cant have two auto incrementing tables in mysql
-connection.query("SELECT manager_id FROM employee;", function (err, res) {
-  if (err) throw err;
-  for (let i = 0; i < res.length; i++) {
-    if (res[i].manager_id != null && managerId < res[i].manager_id) {
-      managerId = res[i].manager_id;
-    }
-  }
-});
-
 // main menu options
 function menu() {
   inquirer
@@ -94,15 +82,15 @@ function viewDept() {
   // get the all the names of the departments and store them in an array
   connection.query("SELECT name FROM department;", function (err, res) {
     if (err) throw err;
-    for (let x = 0; x < res.length; x++) {
-      departments.push(res[x].name);
+    for (let i = 0; i < res.length; i++) {
+      departments.push(res[i].name);
     }
-    // Ask the user which department they would like to see
+    // Ask the user which department
     inquirer
       .prompt({
         name: "department",
         type: "list",
-        message: "Which department would you like to see?",
+        message: "Which department would you like to view?",
         choices: departments,
       })
       .then((response) => {
@@ -129,9 +117,10 @@ function viewRole() {
   let roles = [];
   connection.query("SELECT title FROM role;", function (err, res) {
     if (err) throw err;
-    for (let x = 0; x < res.length; x++) {
-      roles.push(res[x].title);
+    for (let i = 0; i < res.length; i++) {
+      roles.push(res[i].title);
     }
+    // Ask the user which role
     inquirer
       .prompt({
         name: "role",
@@ -159,19 +148,43 @@ function viewRole() {
 }
 
 function addEmp() {
+  // set the default manager id at the largest existing id number
+  let roleId = 0;
+  let managerId = 0;
+  connection.query("SELECT manager_id FROM employee;", function (err, res) {
+    if (err) throw err;
+    for (let i = 0; i < res.length; i++) {
+      if (res[i].manager_id != null && managerId < res[i].manager_id) {
+        managerId = res[i].manager_id;
+      }
+    }
+  });
+  // get all of the role names and push them into an array
+  let roles = [];
+  connection.query("SELECT title FROM role;", function (err, res) {
+    if (err) throw err;
+    for (let i = 0; i < res.length; i++) {
+      roles.push(res[i].title);
+    }
+  });
+  // Ask the user for new employee info
   inquirer
     .prompt([
       {
         name: "first_name",
         type: "input",
-        message:
-          "What is the first name of the new employee you would like to add?",
+        message: "What is the first name of the new employee?",
       },
       {
         name: "last_name",
         type: "input",
-        message:
-          "What is the last name of the new employee you would like to add?",
+        message: "What is the last name of the new employee?",
+      },
+      {
+        name: "role",
+        type: "list",
+        message: "What position will this employee be in?",
+        choices: roles,
       },
       {
         name: "manager",
@@ -181,18 +194,34 @@ function addEmp() {
       },
     ])
     .then((response) => {
+      // change the role title to the role id
+      //   This section is still not working, returns undefined but console logs correctly
+      function roleToId() {
+        connection.query("SELECT id, title FROM role;", function (err, res) {
+          if (err) throw err;
+          for (let i = 0; i < res.length; i++) {
+            if (res[i].title == response.role) {
+              roleId = res[i].id;
+              console.log(roleId);
+              return roleId;
+            }
+          }
+        });
+      }
+      console.log(roleToId());
       if (response.manager == "Yes") {
         managerId++;
         response.manager = managerId;
       } else {
         response.manager = null;
       }
+      console.log(response.manager);
       connection.query(
         `INSERT INTO employee SET ?`,
         {
           first_name: response.first_name,
           last_name: response.last_name,
-          role_id: null,
+          role_id: roleToId(),
           manager_id: response.manager,
         },
         function (err, res) {
@@ -204,17 +233,15 @@ function addEmp() {
         }
       );
     });
-  //   });
 }
 
 function newDept() {
-  // initialize array to store # of departments created to push the correct id into the new row
-  let numDepartments = [];
+  // jerry rig an auto incrementing department id
+  let deptId = [];
   connection.query("SELECT id FROM department;", function (err, res) {
     if (err) throw err;
-    // loop through roles and push into array
-    for (let x = 0; x < res.length; x++) {
-      numDepartments.push(res[x].id);
+    for (let i = 0; i < res.length; i++) {
+      deptId.push(res[i].id);
     }
     inquirer
       .prompt({
@@ -227,7 +254,7 @@ function newDept() {
         connection.query(
           `INSERT INTO department SET ?`,
           {
-            id: numDepartments.length + 1,
+            id: deptId.length + 1,
             name: response.newDepartment,
           },
           function (err, res) {
@@ -246,8 +273,8 @@ function newRole() {
   connection.query("SELECT id FROM role;", function (err, res) {
     if (err) throw err;
     // loop through roles and push into array
-    for (let x = 0; x < res.length; x++) {
-      numRoles.push(res[x].id);
+    for (let i = 0; i < res.length; i++) {
+      numRoles.push(res[i].id);
     }
     inquirer
       .prompt([
@@ -343,12 +370,11 @@ function removeEmp() {
           choices: employees,
         })
         .then((response) => {
-          console.log(response.employeeChoice);
           connection.query(
-            `DELETE from employee WHERE concat(first_name, ' ', last_name) = ${response.employeeChoice}`,
+            `DELETE FROM employee WHERE concat(first_name, ' ', last_name) ="${response.employeeChoice}"`,
             function (err, res) {
               if (err) throw err;
-              console.log("Employee Removed");
+              console.log(`${response.employeeChoice} has been removed`);
               menu();
             }
           );
